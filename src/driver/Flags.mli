@@ -1,5 +1,11 @@
 (** General compiler settings. *)
 
+type sstan_settings =
+  { protected_vars: Core.String.Set.t
+  ; enforce_param_single_use: bool
+  ; disallow_sampling_in_control_flow: bool
+  ; emit_trusted_loglik: bool }
+
 type t =
   { (* ------------------------------- *)
     (* flags affecting code generation *)
@@ -23,7 +29,10 @@ type t =
         (* extra settings *)
   ; warn_pedantic: bool
   ; warn_uninitialized: bool
-  ; filename_in_msg: string option }
+  ; filename_in_msg: string option
+        (* ------------------------- *)
+        (* experimental safety mode *)
+  ; sstan: sstan_settings option }
 
 (** Settings mainly for developers, not users *)
 and debug_settings =
