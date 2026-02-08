@@ -212,8 +212,7 @@ module Options = struct
       "Comma-separated list of data block variable names treated as protected \
        in SafeStan mode." in
     Arg.(
-      value & opt (some string) None & info ["sstan-protect"] ~doc
-      ~docv:"VARS")
+      value & opt (some string) None & info ["sstan-protect"] ~doc ~docv:"VARS")
 end
 
 module Commands = struct
@@ -400,8 +399,7 @@ module Conversion = struct
     let parse_sstan_protected = function
       | None -> String.Set.empty
       | Some vars ->
-          vars |> String.split ~on:','
-          |> List.map ~f:String.strip
+          vars |> String.split ~on:',' |> List.map ~f:String.strip
           |> List.filter ~f:(Fn.non String.is_empty)
           |> String.Set.of_list in
     let+ optimization_level
@@ -473,8 +471,9 @@ let commands =
       else
         match model_file with
         | None -> `Error (true, "No model file provided")
-        | Some _ when Option.value_map flags.sstan ~default:false
-                            ~f:(fun cfg -> Set.is_empty cfg.protected_vars) ->
+        | Some _
+          when Option.value_map flags.sstan ~default:false ~f:(fun cfg ->
+                   Set.is_empty cfg.protected_vars) ->
             `Error (true, "SStan mode requires --sstan-protect")
         | Some model_file ->
             `Ok

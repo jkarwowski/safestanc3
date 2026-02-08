@@ -82,14 +82,13 @@ let stan2cpp model_name model (flags : Flags.t) (output : other_output -> unit)
              , "SStan mode requires --sstan-protect with at least one data \
                 variable name." ))
     | Some cfg ->
-        Frontend.Sstan_check.
-          check_program
-            { protected_vars= cfg.protected_vars
-            ; enforce_param_single_use= cfg.enforce_param_single_use
-            ; disallow_sampling_in_control_flow=
-                cfg.disallow_sampling_in_control_flow
-            ; emit_trusted_loglik= cfg.emit_trusted_loglik }
-            typed_ast
+        Frontend.Sstan_check.check_program
+          { protected_vars= cfg.protected_vars
+          ; enforce_param_single_use= cfg.enforce_param_single_use
+          ; disallow_sampling_in_control_flow=
+              cfg.disallow_sampling_in_control_flow
+          ; emit_trusted_loglik= cfg.emit_trusted_loglik }
+          typed_ast
         |> Result.map_error ~f:(fun e -> Errors.Semantic_error e) in
   if flags.info then output (Info (Info.info typed_ast));
   let deprecation_warnings =

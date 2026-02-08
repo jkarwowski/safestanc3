@@ -24,7 +24,8 @@ let set_from_ids ids =
 let index_expr_refs = function
   | All -> String.Set.empty
   | Single e | Upfrom e | Downfrom e -> set_from_ids (extract_ids e)
-  | Between (e1, e2) -> Set.union (set_from_ids (extract_ids e1)) (set_from_ids (extract_ids e2))
+  | Between (e1, e2) ->
+      Set.union (set_from_ids (extract_ids e1)) (set_from_ids (extract_ids e2))
 
 let expr_refs (e : typed_expression) = set_from_ids (extract_ids e)
 
@@ -32,8 +33,7 @@ let rec lvalue_index_refs ({lval; _} : typed_lval) =
   match lval with
   | LVariable _ -> String.Set.empty
   | LIndexed (inner, indices) ->
-      Set.union
-        (lvalue_index_refs inner)
+      Set.union (lvalue_index_refs inner)
         (List.fold indices ~init:String.Set.empty ~f:(fun acc idx ->
              Set.union acc (index_expr_refs idx)))
   | LTupleProjection (inner, _) -> lvalue_index_refs inner
@@ -59,14 +59,13 @@ let rec statement_expr_refs (stmt : typed_statement) =
           Set.union acc (expr_refs arg))
   | TargetPE e | JacobianPE e | Return e -> expr_refs e
   | Tilde {arg; args; truncation; _} ->
-      List.fold (arg :: args) ~init:(truncation_refs truncation) ~f:(fun acc e ->
-          Set.union acc (expr_refs e))
+      List.fold (arg :: args) ~init:(truncation_refs truncation)
+        ~f:(fun acc e -> Set.union acc (expr_refs e))
   | IfThenElse (cond, s_true, s_false_opt) ->
       let refs_false =
         Option.value_map s_false_opt ~default:String.Set.empty
           ~f:statement_expr_refs in
-      Set.union (expr_refs cond)
-        (Set.union (sub s_true) refs_false)
+      Set.union (expr_refs cond) (Set.union (sub s_true) refs_false)
   | While (cond, body) -> Set.union (expr_refs cond) (sub body)
   | For {lower_bound; upper_bound; loop_body; _} ->
       Set.union (expr_refs lower_bound)
@@ -78,8 +77,8 @@ let rec statement_expr_refs (stmt : typed_statement) =
           Set.union acc (sub st))
   | VarDecl {decl_type; transformation; variables; _} ->
       let refs_in_var acc {initial_value; _} =
-        Option.value_map initial_value ~default:acc
-          ~f:(fun e -> Set.union acc (expr_refs e)) in
+        Option.value_map initial_value ~default:acc ~f:(fun e ->
+            Set.union acc (expr_refs e)) in
       let refs_in_decl_type =
         SizedType.fold
           (fun acc e -> Set.union acc (expr_refs e))
@@ -101,15 +100,13 @@ let rec statement_expr_refs (stmt : typed_statement) =
 let block_declared_names (block : typed_statement Ast.block option) =
   Ast.get_stmts block
   |> List.fold ~init:String.Set.empty ~f:(fun acc stmt ->
-         match stmt.stmt with
-         | VarDecl {variables; _} ->
-             List.fold variables ~init:acc ~f:(fun acc {identifier; _} ->
-                 Set.add acc identifier.name)
-         | _ -> acc)
+      match stmt.stmt with
+      | VarDecl {variables; _} ->
+          List.fold variables ~init:acc ~f:(fun acc {identifier; _} ->
+              Set.add acc identifier.name)
+      | _ -> acc)
 
-let block_loc = function
-  | Some {xloc; _} -> xloc
-  | None -> Location_span.empty
+let block_loc = function Some {xloc; _} -> xloc | None -> Location_span.empty
 
 let check_reserved_identifier (prog : typed_program) =
   let rec base_lvalue = function
@@ -153,18 +150,8 @@ let check_reserved_identifier (prog : typed_program) =
         check_decl_identifier funname;
         List.iter arguments ~f:(fun (_, _, arg) -> check_decl_identifier arg);
         check_stmt body
-    | Tilde _
-    |NRFunApp _
-    |TargetPE _
-    |JacobianPE _
-    |Return _
-    |ReturnVoid
-    |Print _
-    |Reject _
-    |FatalError _
-    |Break
-    |Continue
-    |Skip ->
+    | Tilde _ | NRFunApp _ | TargetPE _ | JacobianPE _ | Return _ | ReturnVoid
+     |Print _ | Reject _ | FatalError _ | Break | Continue | Skip ->
         () in
   Ast.fold_program
     (fun () stmt ->
@@ -195,7 +182,10 @@ let check_forbidden_target_and_lp (prog : typed_program) =
     | BinOp (e1, _, e2) ->
         check_expr e1;
         check_expr e2
-    | PrefixOp (_, e) | PostfixOp (e, _) | Paren e | Promotion (e, _)
+    | PrefixOp (_, e)
+     |PostfixOp (e, _)
+     |Paren e
+     |Promotion (e, _)
      |TupleProjection (e, _) ->
         check_expr e
     | Indexed (e, indices) ->
@@ -206,9 +196,9 @@ let check_forbidden_target_and_lp (prog : typed_program) =
           | Between (e1, e2) ->
               check_expr e1;
               check_expr e2)
-    | ArrayExpr es | RowVectorExpr es | TupleExpr es -> List.iter es ~f:check_expr
-    | Variable _ | IntNumeral _ | RealNumeral _ | ImagNumeral _ -> ()
-  in
+    | ArrayExpr es | RowVectorExpr es | TupleExpr es ->
+        List.iter es ~f:check_expr
+    | Variable _ | IntNumeral _ | RealNumeral _ | ImagNumeral _ -> () in
   let rec check_lvalue ({lval; _} : typed_lval) =
     match lval with
     | LVariable _ -> ()
@@ -220,12 +210,10 @@ let check_forbidden_target_and_lp (prog : typed_program) =
           | Between (e1, e2) ->
               check_expr e1;
               check_expr e2)
-    | LTupleProjection (inner, _) -> check_lvalue inner
-  in
+    | LTupleProjection (inner, _) -> check_lvalue inner in
   let rec check_lvalue_pack = function
     | LValue lv -> check_lvalue lv
-    | LTuplePack {lvals; _} -> List.iter lvals ~f:check_lvalue_pack
-  in
+    | LTuplePack {lvals; _} -> List.iter lvals ~f:check_lvalue_pack in
   let rec check_stmt (stmt : typed_statement) =
     match stmt.stmt with
     | Assignment {assign_lhs; assign_rhs; _} ->
@@ -253,7 +241,8 @@ let check_forbidden_target_and_lp (prog : typed_program) =
              (fun () e ->
                check_expr e;
                ())
-             () truncation : unit)
+             () truncation
+            : unit)
     | IfThenElse (cond, s_true, s_false_opt) ->
         check_expr cond;
         check_stmt s_true;
@@ -275,13 +264,15 @@ let check_forbidden_target_and_lp (prog : typed_program) =
              (fun () e ->
                check_expr e;
                ())
-             () decl_type : unit);
+             () decl_type
+            : unit);
         ignore
           (Transformation.fold
              (fun () e ->
                check_expr e;
                ())
-             () transformation : unit);
+             () transformation
+            : unit);
         List.iter variables ~f:(fun {initial_value; _} ->
             Option.iter initial_value ~f:check_expr)
     | FunDef {funname; body; _} ->
@@ -292,8 +283,7 @@ let check_forbidden_target_and_lp (prog : typed_program) =
         check_stmt body
     | Print ps | Reject ps | FatalError ps ->
         List.iter ps ~f:(function PString _ -> () | PExpr e -> check_expr e)
-    | Break | Continue | ReturnVoid | Skip -> ()
-  in
+    | Break | Continue | ReturnVoid | Skip -> () in
   Ast.fold_program
     (fun () stmt ->
       check_stmt stmt;
@@ -318,17 +308,17 @@ let check_preobservation_blocks config (prog : typed_program) =
   let check_block block block_name =
     Ast.get_stmts block
     |> List.iter ~f:(fun stmt ->
-           let refs = statement_expr_refs stmt in
-           let illegal = Set.inter refs config.protected_vars in
-           if not (Set.is_empty illegal) then
-             fail stmt.smeta.loc
-               (Printf.sprintf
-                  "SStan violation: protected data referenced in %s before \
-                   observation: %s."
-                  block_name (string_of_names illegal))
-               ~hint:
-                 "Move protected-data use into the model block after the \
-                  matching protected observation statement.") in
+        let refs = statement_expr_refs stmt in
+        let illegal = Set.inter refs config.protected_vars in
+        if not (Set.is_empty illegal) then
+          fail stmt.smeta.loc
+            (Printf.sprintf
+               "SStan violation: protected data referenced in %s before \
+                observation: %s."
+               block_name (string_of_names illegal))
+            ~hint:
+              "Move protected-data use into the model block after the matching \
+               protected observation statement.") in
   check_block prog.transformeddatablock "transformed data";
   check_block prog.transformedparametersblock "transformed parameters"
 
@@ -341,8 +331,7 @@ let rec lhs_base_identifier (expr : typed_expression) =
   | _ -> None
 
 let illegal_refs config param_vars state refs =
-  let unobserved =
-    Set.diff config.protected_vars state.observed_protected in
+  let unobserved = Set.diff config.protected_vars state.observed_protected in
   let illegal_protected = Set.inter refs unobserved in
   let illegal_params =
     if config.enforce_param_single_use then
@@ -352,15 +341,16 @@ let illegal_refs config param_vars state refs =
   (illegal_protected, illegal_params)
 
 let ensure_allowed_refs config param_vars state loc refs =
-  let illegal_protected, illegal_params = illegal_refs config param_vars state refs in
+  let illegal_protected, illegal_params =
+    illegal_refs config param_vars state refs in
   if not (Set.is_empty illegal_protected) then
     fail loc
       (Printf.sprintf
          "SStan violation: protected data used before observation: %s."
          (string_of_names illegal_protected))
       ~hint:
-        "Observe each protected variable earlier in the model block using \
-         `y ~ dist(...)`.";
+        "Observe each protected variable earlier in the model block using `y ~ \
+         dist(...)`.";
   if not (Set.is_empty illegal_params) then
     fail loc
       (Printf.sprintf
@@ -422,16 +412,19 @@ let rec check_model_stmt config param_vars ~in_control_flow state
       let lhs_name = lhs_id.name in
       let is_protected = Set.mem config.protected_vars lhs_name in
       let is_param = Set.mem param_vars lhs_name in
-      if (not is_protected) && (not (config.enforce_param_single_use && is_param)) then
+      if (not is_protected) && not (config.enforce_param_single_use && is_param)
+      then
         fail distribution.id_loc
           (Printf.sprintf
              "SStan violation: sampling statements may only target protected \
               data%s; found `%s`."
-             (if config.enforce_param_single_use then " and parameter variables" else "")
+             (if config.enforce_param_single_use then " and parameter variables"
+              else "")
              lhs_name)
           ~hint:
             "Move deterministic factors out of sampling statements, and keep \
-             `~` only for protected data (and parameter priors in strict mode).";
+             `~` only for protected data (and parameter priors in strict \
+             mode).";
       if is_protected || (config.enforce_param_single_use && is_param) then
         disallow_sampling_in_control_flow config ~in_control_flow stmt.smeta.loc
           lhs_name;
@@ -448,10 +441,12 @@ let rec check_model_stmt config param_vars ~in_control_flow state
                "SStan violation: protected data variable `%s` is observed more \
                 than once."
                lhs_name)
-            ~hint:"Each protected data variable must appear on the left-hand side of exactly one sampling statement.";
+            ~hint:
+              "Each protected data variable must appear on the left-hand side \
+               of exactly one sampling statement.";
         { state with
           observed_protected= Set.add state.observed_protected lhs_name
-        ; protected_counts= update_count state.protected_counts lhs_name } )
+        ; protected_counts= update_count state.protected_counts lhs_name })
       else
         let new_count = count_of state.param_counts lhs_name + 1 in
         if new_count > 1 then
@@ -460,12 +455,15 @@ let rec check_model_stmt config param_vars ~in_control_flow state
                "SStan violation: parameter `%s` has more than one sampling \
                 statement in strict mode."
                lhs_name)
-            ~hint:"Each parameter must have exactly one prior/assignment sampling statement in strict mode.";
+            ~hint:
+              "Each parameter must have exactly one prior/assignment sampling \
+               statement in strict mode.";
         { state with
           assigned_params= Set.add state.assigned_params lhs_name
         ; param_counts= update_count state.param_counts lhs_name }
   | IfThenElse (cond, s_true, s_false_opt) ->
-      ensure_allowed_refs config param_vars state cond.emeta.loc (expr_refs cond);
+      ensure_allowed_refs config param_vars state cond.emeta.loc
+        (expr_refs cond);
       ignore
         (check_model_stmt config param_vars ~in_control_flow:true state s_true
           : model_state);
@@ -475,7 +473,8 @@ let rec check_model_stmt config param_vars ~in_control_flow state
               : model_state));
       state
   | While (cond, body) ->
-      ensure_allowed_refs config param_vars state cond.emeta.loc (expr_refs cond);
+      ensure_allowed_refs config param_vars state cond.emeta.loc
+        (expr_refs cond);
       ignore
         (check_model_stmt config param_vars ~in_control_flow:true state body
           : model_state);
@@ -484,18 +483,21 @@ let rec check_model_stmt config param_vars ~in_control_flow state
       ensure_allowed_refs config param_vars state lower_bound.emeta.loc
         (Set.union (expr_refs lower_bound) (expr_refs upper_bound));
       ignore
-        (check_model_stmt config param_vars ~in_control_flow:true state loop_body
+        (check_model_stmt config param_vars ~in_control_flow:true state
+           loop_body
           : model_state);
       state
   | ForEach (_, iteratee, loop_body) ->
       ensure_allowed_refs config param_vars state iteratee.emeta.loc
         (expr_refs iteratee);
       ignore
-        (check_model_stmt config param_vars ~in_control_flow:true state loop_body
+        (check_model_stmt config param_vars ~in_control_flow:true state
+           loop_body
           : model_state);
       state
   | Block stmts | Profile (_, stmts) ->
-      List.fold stmts ~init:state ~f:(check_model_stmt config param_vars ~in_control_flow)
+      List.fold stmts ~init:state
+        ~f:(check_model_stmt config param_vars ~in_control_flow)
   | FunDef _ ->
       fail stmt.smeta.loc
         "SStan violation: function definitions are not allowed in the model \
@@ -523,7 +525,8 @@ let check_model_block config param_vars (prog : typed_program) =
   let missing_protected =
     missing_names final_state.protected_counts config.protected_vars in
   if not (Set.is_empty missing_protected) then
-    fail (block_loc prog.modelblock)
+    fail
+      (block_loc prog.modelblock)
       (Printf.sprintf
          "SStan violation: each protected data variable must be observed \
           exactly once. Missing observations for: %s."
@@ -534,7 +537,8 @@ let check_model_block config param_vars (prog : typed_program) =
   if config.enforce_param_single_use then
     let missing_params = missing_names final_state.param_counts param_vars in
     if not (Set.is_empty missing_params) then
-      fail (block_loc prog.modelblock)
+      fail
+        (block_loc prog.modelblock)
         (Printf.sprintf
            "SStan violation: each parameter must have exactly one sampling \
             statement in strict mode. Missing priors for: %s."

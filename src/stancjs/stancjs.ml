@@ -156,10 +156,9 @@ let process_flags (flags : 'a Js.opt) includes : (flags, string) result =
       let parse_sstan_protected () =
         flag_val "sstan-protect"
         |> Option.value_map ~default:String.Set.empty ~f:(fun vars ->
-               vars |> String.split ~on:','
-               |> List.map ~f:String.strip
-               |> List.filter ~f:(Fn.non String.is_empty)
-               |> String.Set.of_list) in
+            vars |> String.split ~on:',' |> List.map ~f:String.strip
+            |> List.filter ~f:(Fn.non String.is_empty)
+            |> String.Set.of_list) in
       { driver_flags=
           { optimization_level=
               (if is_flag_set "O0" then Optimize.O0

@@ -119,8 +119,10 @@ let%expect_test "whole program data generation check" =
         ]
       } |}]
 
-let%expect_test "whole program data generation check (flaky snapshot disabled)" =
-  (* Disabled: upstream snapshot is unstable across environments at ULP level. *)
+let%expect_test "whole program data generation check (flaky snapshot disabled)"
+    =
+  (* Disabled: upstream snapshot is unstable across environments at ULP
+     level. *)
   ()
 
 let%expect_test "whole program data generation check" =
