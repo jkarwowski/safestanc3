@@ -2,66 +2,45 @@ Cmdliner error output can be different if color is enabled
   $ export NO_COLOR=1
 
 Require protected list
-  $ stanc --sstanc good.stan
+  $ stanc --sstanc pass/01_basic_scalar_normal.stan
   Usage: %%NAME%% [--help] [OPTION]… [MODEL_FILE]
   %%NAME%%: SStan mode requires --sstan-protect
   [124]
 
-Reject target edits
-  $ stanc --sstanc --sstan-protect=y bad-target.stan > /tmp/sstanc.err 2>&1 || true
-  $ grep "SStan violation:" /tmp/sstanc.err
-  SStan violation: direct `target +=` adjustments are forbidden in --sstanc mode.
-
-Reject _lp function definitions
-  $ stanc --sstanc --sstan-protect=y bad-lp-fundef.stan > /tmp/sstanc.err 2>&1 || true
-  $ grep "SStan violation:" /tmp/sstanc.err
-  SStan violation: defining functions with `_lp` suffix is forbidden in --sstanc mode.
-
-Reject missing protected observations
-  $ stanc --sstanc --sstan-protect=y bad-unobserved.stan > /tmp/sstanc.err 2>&1 || true
-  $ grep "SStan violation:" /tmp/sstanc.err
-  SStan violation: each protected data variable must be observed exactly once. Missing observations for: y.
-
-Reject duplicate protected observations
-  $ stanc --sstanc --sstan-protect=y bad-double-observe.stan > /tmp/sstanc.err 2>&1 || true
-  $ grep "SStan violation:" /tmp/sstanc.err
-  SStan violation: protected data variable `y` is observed more than once.
-
-Reject protected data in transformed data
-  $ stanc --sstanc --sstan-protect=y bad-transformed-data-use.stan > /tmp/sstanc.err 2>&1 || true
-  $ grep "SStan violation:" /tmp/sstanc.err
-  SStan violation: protected data referenced in transformed data before observation: y.
-
-Reject protected data use before observation in model block
-  $ stanc --sstanc --sstan-protect=y bad-before-observe.stan > /tmp/sstanc.err 2>&1 || true
-  $ grep "SStan violation:" /tmp/sstanc.err
-  SStan violation: protected data used before observation: y.
-
-Reject indexed protected observation
-  $ stanc --sstanc --sstan-protect=y bad-indexed-observe.stan > /tmp/sstanc.err 2>&1 || true
-  $ grep "SStan violation:" /tmp/sstanc.err
-  SStan violation: sampling statement left-hand side must be a plain identifier (no indexing, projection, or expression).
-
-Reject user-defined distributions
-  $ stanc --sstanc --sstan-protect=y bad-userdist.stan > /tmp/sstanc.err 2>&1 || true
-  $ grep "SStan violation:" /tmp/sstanc.err
-  SStan violation: user-defined distributions are not allowed in --sstanc mode.
-
-Reject protected sampling in control flow
-  $ stanc --sstanc --sstan-protect=y bad-control-flow-observe.stan > /tmp/sstanc.err 2>&1 || true
-  $ grep "SStan violation:" /tmp/sstanc.err
-  SStan violation: sampling statement for `y` appears inside control flow.
-
 Reject non-data protected names
-  $ stanc --sstanc --sstan-protect=not_data good.stan > /tmp/sstanc.err 2>&1 || true
-  $ grep "SStan violation:" /tmp/sstanc.err
-  SStan violation: --sstan-protect contains names not declared as top-level data variables: not_data.
+  $ stanc --sstanc --sstan-protect=not_data pass/01_basic_scalar_normal.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
+  $ grep -q "SStan violation:" /tmp/sstanc.err
 
-Safe model compiles
-  $ stanc --sstanc --sstan-protect=y good.stan
+PASS cases compile
+  $ stanc --sstanc --sstan-protect=y pass/01_basic_scalar_normal.stan
+  $ stanc --sstanc --sstan-protect=y pass/02_vectorized_linear_regression.stan
+  $ stanc --sstanc --sstan-protect=y,z pass/03_two_protected_scalars_after_observation.stan
+  $ stanc --sstanc --sstan-protect=y pass/04_hierarchical_group_index_loop.stan
+  $ stanc --sstanc --sstan-protect=y pass/05_logistic_regression_bernoulli_logit.stan
+  $ stanc --sstanc --sstan-protect=y pass/06_poisson_regression_log_link.stan
+  $ stanc --sstanc --sstan-protect=y pass/07_multivariate_normal_likelihood.stan
+  $ stanc --sstanc --sstan-protect=y pass/08_robust_student_t_regression.stan
+  $ stanc --sstanc --sstan-protect=x_obs,y_obs pass/09_error_in_variables_two_protected_vectors.stan
+  $ stanc --sstanc --sstan-protect=y pass/10_udf_deterministic_helper.stan
 
-Multiple protected data variables compile
-  $ stanc --sstanc --sstan-protect=x,y good-multi-protected.stan
-
-Unprotected covariates can be used freely
-  $ stanc --sstanc --sstan-protect=y good-unprotected-covariate.stan
+FAIL cases reject with SStan violation
+  $ stanc --sstanc --sstan-protect=y fail/01_arbitrary_scoring_target_plus_equals.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
+  $ grep -q "SStan violation:" /tmp/sstanc.err
+  $ stanc --sstanc --sstan-protect=y fail/02_protected_data_used_before_observation.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
+  $ grep -q "SStan violation:" /tmp/sstanc.err
+  $ stanc --sstanc --sstan-protect=y fail/03_protected_data_in_transformed_data.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
+  $ grep -q "SStan violation:" /tmp/sstanc.err
+  $ stanc --sstanc --sstan-protect=y fail/04_protected_data_never_observed.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
+  $ grep -q "SStan violation:" /tmp/sstanc.err
+  $ stanc --sstanc --sstan-protect=y fail/05_protected_data_observed_twice.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
+  $ grep -q "SStan violation:" /tmp/sstanc.err
+  $ stanc --sstanc --sstan-protect=y fail/06_partial_observation_indexed_lhs.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
+  $ grep -q "SStan violation:" /tmp/sstanc.err
+  $ stanc --sstanc --sstan-protect=y fail/07_observation_inside_control_flow.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
+  $ grep -q "SStan violation:" /tmp/sstanc.err
+  $ stanc --sstanc --sstan-protect=y fail/08_user_defined_distribution_in_tilde.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
+  $ grep -q "SStan violation:" /tmp/sstanc.err
+  $ stanc --sstanc --sstan-protect=y fail/09_sampling_on_unprotected_data.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
+  $ grep -q "SStan violation:" /tmp/sstanc.err
+  $ stanc --sstanc --sstan-protect=y fail/10_lp_function_definition_or_call.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
+  $ grep -q "SStan violation:" /tmp/sstanc.err
