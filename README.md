@@ -102,6 +102,19 @@ SafeStan integration coverage:
 opam exec -- dune runtest test/integration/cli-args/sstanc.t
 ```
 
+Benchmark-model comparison fixture:
+
+- Location: `test/integration/cli-args/sstanc.t/compared`
+- Contents: 10 paired models, each with:
+  - `*.original.stan`: original Stan integration model
+  - `*.safestan.stan`: SafeStan transplant (or an intentional failing variant
+    when not transplantable)
+- Harness: included in
+  `test/integration/cli-args/sstanc.t/run.t` and exercised by the same
+  `dune runtest` command above.
+- Notes for each model are in
+  `test/integration/cli-args/sstanc.t/compared/README.md`.
+
 Broader CLI checks:
 
 ```bash

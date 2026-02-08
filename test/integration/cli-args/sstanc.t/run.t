@@ -69,3 +69,35 @@ Legacy fail cases reject from new layout
   $ grep -q "SStan violation:" /tmp/sstanc.err
   $ stanc --sstanc --sstan-protect=y fail/bad-control-flow-observe.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
   $ grep -q "SStan violation:" /tmp/sstanc.err
+
+Compared benchmark models: originals compile in standard Stan mode
+  $ stanc compared/arK.original.stan >/tmp/sstanc_compile.log 2>&1
+  $ stanc compared/arma.original.stan >/tmp/sstanc_compile.log 2>&1
+  $ stanc compared/eight_schools.original.stan >/tmp/sstanc_compile.log 2>&1
+  $ stanc compared/gp_pois_regr.original.stan >/tmp/sstanc_compile.log 2>&1
+  $ stanc compared/gp_regr.original.stan >/tmp/sstanc_compile.log 2>&1
+  $ stanc compared/irt_2pl.original.stan >/tmp/sstanc_compile.log 2>&1
+  $ stanc compared/one_comp_mm_elim_abs.original.stan >/tmp/sstanc_compile.log 2>&1
+  $ stanc compared/sir.original.stan >/tmp/sstanc_compile.log 2>&1
+  $ stanc compared/low_dim_gauss_mix.original.stan >/tmp/sstanc_compile.log 2>&1
+  $ stanc compared/low_dim_gauss_mix_collapse.original.stan >/tmp/sstanc_compile.log 2>&1
+
+Compared benchmark models: SafeStan transplants that pass
+  $ stanc --sstanc --sstan-protect=y_obs compared/arK.safestan.stan >/tmp/sstanc_compile.log 2>&1
+  $ stanc --sstanc --sstan-protect=y_obs compared/arma.safestan.stan >/tmp/sstanc_compile.log 2>&1
+  $ stanc --sstanc --sstan-protect=y compared/eight_schools.safestan.stan >/tmp/sstanc_compile.log 2>&1
+  $ stanc --sstanc --sstan-protect=k compared/gp_pois_regr.safestan.stan >/tmp/sstanc_compile.log 2>&1
+  $ stanc --sstanc --sstan-protect=y compared/gp_regr.safestan.stan >/tmp/sstanc_compile.log 2>&1
+  $ stanc --sstanc --sstan-protect=y_flat compared/irt_2pl.safestan.stan >/tmp/sstanc_compile.log 2>&1
+  $ stanc --sstanc --sstan-protect=C_hat compared/one_comp_mm_elim_abs.safestan.stan >/tmp/sstanc_compile.log 2>&1
+  $ stanc --sstanc --sstan-protect=stoi_hat,B_hat compared/sir.safestan.stan >/tmp/sstanc_compile.log 2>&1
+
+Compared benchmark models: known non-transplantable cases fail under SafeStan
+  $ stanc --sstanc --sstan-protect=y compared/low_dim_gauss_mix.safestan.stan > /tmp/sstanc.err 2>&1; rc=$?; test $rc -ne 0
+  $ grep -q "SStan violation:" /tmp/sstanc.err
+  $ grep -q "direct" /tmp/sstanc.err
+  $ grep -q "target +=" /tmp/sstanc.err
+  $ stanc --sstanc --sstan-protect=y compared/low_dim_gauss_mix_collapse.safestan.stan > /tmp/sstanc.err 2>&1; rc=$?; test $rc -ne 0
+  $ grep -q "SStan violation:" /tmp/sstanc.err
+  $ grep -q "direct" /tmp/sstanc.err
+  $ grep -q "target +=" /tmp/sstanc.err
