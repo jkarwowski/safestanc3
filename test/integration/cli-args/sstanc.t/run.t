@@ -44,3 +44,28 @@ FAIL cases reject with SStan violation
   $ grep -q "SStan violation:" /tmp/sstanc.err
   $ stanc --sstanc --sstan-protect=y fail/10_lp_function_definition_or_call.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
   $ grep -q "SStan violation:" /tmp/sstanc.err
+
+Legacy pass cases compile from new layout
+  $ stanc --sstanc --sstan-protect=y pass/good.stan
+  $ stanc --sstanc --sstan-protect=x,y pass/good-multi-protected.stan
+  $ stanc --sstanc --sstan-protect=y pass/good-unprotected-covariate.stan
+
+Legacy fail cases reject from new layout
+  $ stanc --sstanc --sstan-protect=y fail/bad-target.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
+  $ grep -q "SStan violation:" /tmp/sstanc.err
+  $ stanc --sstanc --sstan-protect=y fail/bad-lp-fundef.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
+  $ grep -q "SStan violation:" /tmp/sstanc.err
+  $ stanc --sstanc --sstan-protect=y fail/bad-unobserved.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
+  $ grep -q "SStan violation:" /tmp/sstanc.err
+  $ stanc --sstanc --sstan-protect=y fail/bad-double-observe.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
+  $ grep -q "SStan violation:" /tmp/sstanc.err
+  $ stanc --sstanc --sstan-protect=y fail/bad-transformed-data-use.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
+  $ grep -q "SStan violation:" /tmp/sstanc.err
+  $ stanc --sstanc --sstan-protect=y fail/bad-before-observe.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
+  $ grep -q "SStan violation:" /tmp/sstanc.err
+  $ stanc --sstanc --sstan-protect=y fail/bad-indexed-observe.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
+  $ grep -q "SStan violation:" /tmp/sstanc.err
+  $ stanc --sstanc --sstan-protect=y fail/bad-userdist.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
+  $ grep -q "SStan violation:" /tmp/sstanc.err
+  $ stanc --sstanc --sstan-protect=y fail/bad-control-flow-observe.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
+  $ grep -q "SStan violation:" /tmp/sstanc.err
