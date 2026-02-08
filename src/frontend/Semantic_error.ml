@@ -553,6 +553,7 @@ module StatementError = struct
     | ComplexTransform
     | TransformedParamsInt
     | IllTypedAssignment of Operator.t * UnsizedType.t * UnsizedType.t
+    | SStanViolation of string * string option
 
   let pp ppf = function
     | CannotAssignToReadOnly name ->
@@ -667,6 +668,10 @@ module StatementError = struct
            lhs:@]@ %a"
           Operator.pp op UnsizedType.pp lt UnsizedType.pp rt
           SignatureMismatch.pp_math_lib_assignmentoperator_sigs (lt, op)
+    | SStanViolation (message, hint) ->
+        Fmt.pf ppf "@[<v>%s%a@]" message
+          Fmt.(option (fun ppf h -> pf ppf "@ Hint: %s" h))
+          hint
 end
 
 type err =
@@ -954,3 +959,6 @@ let duplicate_arg_names loc =
 
 let incompatible_return_types loc =
   (loc, TypeError TypeError.IncompatibleReturnType)
+
+let sstan_violation loc message hint =
+  (loc, StatementError (StatementError.SStanViolation (message, hint)))

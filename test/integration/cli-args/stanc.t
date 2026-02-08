@@ -94,6 +94,14 @@ Show help
          --print-cpp
              If set, output the generated C++ Stan model class to stdout.
   
+         --sstan-protect=VARS
+             Comma-separated list of data block variable names treated as
+             protected in SafeStan mode.
+  
+         --sstanc
+             Enable SafeStan compile-time restrictions for adversarial model
+             settings.
+  
          --standalone-functions
              If set, the generated C++ will only contain the code for the
              functions in the functions block, not the full Stan model class.
@@ -208,6 +216,9 @@ Show help
   BUGS
          Please report at %%PKG_ISSUES%%.
   
+
+
+ 
 Qmark alias
   $ stanc -? plain | head
   NAME

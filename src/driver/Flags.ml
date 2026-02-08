@@ -1,5 +1,11 @@
 open Core
 
+type sstan_settings =
+  { protected_vars: String.Set.t
+  ; enforce_param_single_use: bool
+  ; disallow_sampling_in_control_flow: bool
+  ; emit_trusted_loglik: bool }
+
 type t =
   { optimization_level: Analysis_and_optimization.Optimize.optimization_level
   ; allow_undefined: bool
@@ -15,7 +21,8 @@ type t =
   ; canonicalizer_settings: Frontend.Canonicalize.canonicalizer_settings
   ; warn_pedantic: bool
   ; warn_uninitialized: bool
-  ; filename_in_msg: string option }
+  ; filename_in_msg: string option
+  ; sstan: sstan_settings option }
 
 and debug_settings =
   { print_ast: bool
@@ -68,7 +75,8 @@ let default =
   ; canonicalizer_settings= Frontend.Canonicalize.none
   ; warn_pedantic= false
   ; warn_uninitialized= false
-  ; filename_in_msg= None }
+  ; filename_in_msg= None
+  ; sstan= None }
 
 let set_backend_args_list flags =
   (* Ignore the "--o" arg, the stan file and the binary name (bin/stanc). *)

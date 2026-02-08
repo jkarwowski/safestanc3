@@ -153,6 +153,13 @@ let process_flags (flags : 'a Js.opt) includes : (flags, string) result =
       let flag_val flag =
         let prefix = flag ^ "=" in
         Array.find_map flags ~f:(String.chop_prefix ~prefix) in
+      let parse_sstan_protected () =
+        flag_val "sstan-protect"
+        |> Option.value_map ~default:String.Set.empty ~f:(fun vars ->
+               vars |> String.split ~on:','
+               |> List.map ~f:String.strip
+               |> List.filter ~f:(Fn.non String.is_empty)
+               |> String.Set.of_list) in
       { driver_flags=
           { optimization_level=
               (if is_flag_set "O0" then Optimize.O0
@@ -213,7 +220,15 @@ let process_flags (flags : 'a Js.opt) includes : (flags, string) result =
                        (String.split ~on:',' s))
           ; warn_pedantic= is_flag_set "warn-pedantic"
           ; warn_uninitialized= is_flag_set "warn-uninitialized"
-          ; filename_in_msg= flag_val "filename-in-msg" }
+          ; filename_in_msg= flag_val "filename-in-msg"
+          ; sstan=
+              (if is_flag_set "sstanc" then
+                 Some
+                   { Driver.Flags.protected_vars= parse_sstan_protected ()
+                   ; enforce_param_single_use= true
+                   ; disallow_sampling_in_control_flow= true
+                   ; emit_trusted_loglik= false }
+               else None) }
       ; color_output= is_flag_set "color-output" }
 
 (** Handle conversion of JS <-> OCaml values invoke driver *)

@@ -200,6 +200,20 @@ module Options = struct
     let doc =
       "$(i,(Experimental)) Emit warnings about uninitialized variables." in
     Arg.(multi_flag "warn-uninitialized" & info ~doc)
+
+  let sstanc =
+    let doc =
+      "Enable SafeStan compile-time restrictions for adversarial model \
+       settings." in
+    Arg.(multi_flag "sstanc" & info ~doc)
+
+  let sstan_protect =
+    let doc =
+      "Comma-separated list of data block variable names treated as protected \
+       in SafeStan mode." in
+    Arg.(
+      value & opt (some string) None & info ["sstan-protect"] ~doc
+      ~docv:"VARS")
 end
 
 module Commands = struct
@@ -383,6 +397,13 @@ module Conversion = struct
 
   let flags : Driver.Flags.t Term.t =
     let open Options in
+    let parse_sstan_protected = function
+      | None -> String.Set.empty
+      | Some vars ->
+          vars |> String.split ~on:','
+          |> List.map ~f:String.strip
+          |> List.filter ~f:(Fn.non String.is_empty)
+          |> String.Set.of_list in
     let+ optimization_level
     and+ allow_undefined
     and+ standalone_functions
@@ -396,6 +417,8 @@ module Conversion = struct
     and+ warn_pedantic
     and+ warn_uninitialized
     and+ filename_in_msg
+    and+ sstanc
+    and+ sstan_protect
     and+ debug_settings in
     Driver.Flags.
       { optimization_level
@@ -414,6 +437,14 @@ module Conversion = struct
       ; warn_pedantic
       ; warn_uninitialized
       ; filename_in_msg
+      ; sstan=
+          (if sstanc then
+             Some
+               { protected_vars= parse_sstan_protected sstan_protect
+               ; enforce_param_single_use= true
+               ; disallow_sampling_in_control_flow= true
+               ; emit_trusted_loglik= false }
+           else None)
       ; debug_settings }
 end
 
@@ -442,6 +473,9 @@ let commands =
       else
         match model_file with
         | None -> `Error (true, "No model file provided")
+        | Some _ when Option.value_map flags.sstan ~default:false
+                            ~f:(fun cfg -> Set.is_empty cfg.protected_vars) ->
+            `Error (true, "SStan mode requires --sstan-protect")
         | Some model_file ->
             `Ok
               (`Default
