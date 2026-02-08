@@ -376,16 +376,25 @@ let check_distribution_is_builtin (kind : fun_kind) loc =
           "Use one of Stan's built-in normalized distributions for all \
            sampling statements."
 
-let disallow_sampling_in_control_flow config ~in_control_flow loc lhs_name =
-  if config.disallow_sampling_in_control_flow && in_control_flow then
+type control_context = {in_loop: bool}
+
+let disallow_sampling_in_control_flow config ~context loc lhs_name =
+  if config.disallow_sampling_in_control_flow && context.in_loop then
     fail loc
       (Printf.sprintf
-         "SStan violation: sampling statement for `%s` appears inside control \
-          flow."
+         "SStan violation: sampling statement for `%s` appears inside loop \
+          control flow."
          lhs_name)
       ~hint:
-        "Move protected observations and parameter priors to top-level \
-         statements in the model block."
+        "Move protected observations and parameter priors outside loops. \
+         Conditional (`if/else`) sampling is allowed only when branch effects \
+         match."
+
+let equal_model_state s1 s2 =
+  Set.equal s1.observed_protected s2.observed_protected
+  && Map.equal Int.equal s1.protected_counts s2.protected_counts
+  && Set.equal s1.assigned_params s2.assigned_params
+  && Map.equal Int.equal s1.param_counts s2.param_counts
 
 let ensure_plain_lhs lhs_info loc =
   match lhs_info with
@@ -402,7 +411,7 @@ let ensure_plain_lhs lhs_info loc =
         "SStan violation: sampling statement left-hand side must be a variable \
          identifier."
 
-let rec check_model_stmt config param_vars ~in_control_flow state
+let rec check_model_stmt config param_vars ~context state
     (stmt : typed_statement) =
   match stmt.stmt with
   | Tilde {arg; distribution; kind; args; truncation} ->
@@ -426,7 +435,7 @@ let rec check_model_stmt config param_vars ~in_control_flow state
              `~` only for protected data (and parameter priors in strict \
              mode).";
       if is_protected || (config.enforce_param_single_use && is_param) then
-        disallow_sampling_in_control_flow config ~in_control_flow stmt.smeta.loc
+        disallow_sampling_in_control_flow config ~context stmt.smeta.loc
           lhs_name;
       check_distribution_is_builtin kind distribution.id_loc;
       let rhs_refs =
@@ -464,26 +473,32 @@ let rec check_model_stmt config param_vars ~in_control_flow state
   | IfThenElse (cond, s_true, s_false_opt) ->
       ensure_allowed_refs config param_vars state cond.emeta.loc
         (expr_refs cond);
-      ignore
-        (check_model_stmt config param_vars ~in_control_flow:true state s_true
-          : model_state);
-      Option.iter s_false_opt ~f:(fun s ->
-          ignore
-            (check_model_stmt config param_vars ~in_control_flow:true state s
-              : model_state));
-      state
+      let true_state =
+        check_model_stmt config param_vars ~context state s_true in
+      let false_state =
+        Option.value_map s_false_opt ~default:state ~f:(fun s ->
+            check_model_stmt config param_vars ~context state s) in
+      if not (equal_model_state true_state false_state) then
+        fail stmt.smeta.loc
+          "SStan violation: conditional branches must have identical sampling \
+           effects for protected data and parameters."
+          ~hint:
+            "Ensure both branches consume the same protected data and \
+             parameters exactly once, or move shared sampling statements \
+             outside the conditional.";
+      true_state
   | While (cond, body) ->
       ensure_allowed_refs config param_vars state cond.emeta.loc
         (expr_refs cond);
       ignore
-        (check_model_stmt config param_vars ~in_control_flow:true state body
+        (check_model_stmt config param_vars ~context:{in_loop= true} state body
           : model_state);
       state
   | For {lower_bound; upper_bound; loop_body; _} ->
       ensure_allowed_refs config param_vars state lower_bound.emeta.loc
         (Set.union (expr_refs lower_bound) (expr_refs upper_bound));
       ignore
-        (check_model_stmt config param_vars ~in_control_flow:true state
+        (check_model_stmt config param_vars ~context:{in_loop= true} state
            loop_body
           : model_state);
       state
@@ -491,13 +506,13 @@ let rec check_model_stmt config param_vars ~in_control_flow state
       ensure_allowed_refs config param_vars state iteratee.emeta.loc
         (expr_refs iteratee);
       ignore
-        (check_model_stmt config param_vars ~in_control_flow:true state
+        (check_model_stmt config param_vars ~context:{in_loop= true} state
            loop_body
           : model_state);
       state
   | Block stmts | Profile (_, stmts) ->
       List.fold stmts ~init:state
-        ~f:(check_model_stmt config param_vars ~in_control_flow)
+        ~f:(check_model_stmt config param_vars ~context)
   | FunDef _ ->
       fail stmt.smeta.loc
         "SStan violation: function definitions are not allowed in the model \
@@ -521,7 +536,7 @@ let check_model_block config param_vars (prog : typed_program) =
   let final_state =
     Ast.get_stmts prog.modelblock
     |> List.fold ~init:init_state
-         ~f:(check_model_stmt config param_vars ~in_control_flow:false) in
+         ~f:(check_model_stmt config param_vars ~context:{in_loop= false}) in
   let missing_protected =
     missing_names final_state.protected_counts config.protected_vars in
   if not (Set.is_empty missing_protected) then

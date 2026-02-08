@@ -50,7 +50,9 @@ When `--sstanc` is on:
 
 5. Control-flow safety:
    - Protected observations and parameter-prior sampling statements cannot appear
-     inside `if`/`for`/`while`.
+     inside loops (`for`/`while`/`foreach`).
+   - Conditional (`if/else`) sampling is allowed only when both branches produce
+     identical sampling effects for protected variables and parameters.
 
 6. Reserved identifier:
    - `sstan_trusted_loglik__` is reserved in SafeStan mode.

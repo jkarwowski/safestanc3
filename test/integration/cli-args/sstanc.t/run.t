@@ -23,6 +23,7 @@ PASS cases compile
   $ stanc --sstanc --sstan-protect=x_obs,y_obs pass/09_error_in_variables_two_protected_vectors.stan
   $ stanc --sstanc --sstan-protect=y pass/10_udf_deterministic_helper.stan
   $ stanc --sstanc --sstan-protect=x,y pass/11_two_protected_no_parameters.stan
+  $ stanc --sstanc --sstan-protect=y pass/12_conditional_matched_observation.stan
 
 FAIL cases reject with SStan violation
   $ stanc --sstanc --sstan-protect=y fail/01_arbitrary_scoring_target_plus_equals.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
@@ -37,7 +38,7 @@ FAIL cases reject with SStan violation
   $ grep -q "SStan violation:" /tmp/sstanc.err
   $ stanc --sstanc --sstan-protect=y fail/06_partial_observation_indexed_lhs.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
   $ grep -q "SStan violation:" /tmp/sstanc.err
-  $ stanc --sstanc --sstan-protect=y fail/07_observation_inside_control_flow.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
+  $ stanc --sstanc --sstan-protect=y fail/07_conditional_branch_mismatch.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
   $ grep -q "SStan violation:" /tmp/sstanc.err
   $ stanc --sstanc --sstan-protect=y fail/08_user_defined_distribution_in_tilde.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
   $ grep -q "SStan violation:" /tmp/sstanc.err
