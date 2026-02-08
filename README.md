@@ -1,127 +1,116 @@
-# A New Stan-to-C++ Compiler, stanc3
+# SafeStan (SStan) for stanc3
 
-This repo contains a new compiler for Stan, stanc3, written in OCaml.
-The latest release (with binaries for many platforms and a JavaScript version)
-can be found on the [releases page](https://github.com/stan-dev/stanc3/releases).
+This fork adds a SafeStan mode to `stanc3` for adversarial settings where the
+model author is not trusted.
 
-Since version 2.26, this has been the default compiler for Stan.
+SafeStan is a static (compile-time) restriction layer over Stan. Its purpose is
+to prevent likelihood hacking on a designated protected data interface.
 
-[![Build Status](https://jenkins.flatironinstitute.org/job/Stan/job/Stanc3/job/master/badge/icon?style=flat-square)](https://jenkins.flatironinstitute.org/job/Stan/job/Stanc3/job/master/) [![codecov](https://codecov.io/gh/stan-dev/stanc3/branch/master/graph/badge.svg?token=tt76nVXoht)](https://codecov.io/gh/stan-dev/stanc3)
+The original upstream-style compiler README is preserved as `README_original`.
 
-## Documentation
+## Quick Start
 
-Documentation for users of stanc3 is in the Stan Users' Guide [here](https://mc-stan.org/docs/stan-users-guide/using-the-stan-compiler.html)
+Build:
 
-Developer documentation is available [here](https://mc-stan.org/stanc3/stanc).
-Want to contribute? See [Getting Started](https://mc-stan.org/stanc3/stanc/getting_started.html)
-for setup instructions and some useful commands.
-
-## High-level concepts, invariants, and 30,000-ft view
-
-Stanc3 has 4 main src packages: `frontend`, `middle`, `analysis_and_optimization` and `stan_math_backend`.
-These are pieced together by the `driver` module.
-
-```mermaid
-flowchart
-   Stanc & StancJS --> Driver --> Frontend & Analysis & Backend <-.-> Middle
-
-   click Stanc "https://github.com/stan-dev/stanc3/blob/master/src/stanc/stanc.ml"
-   click StancJS "https://github.com/stan-dev/stanc3/blob/master/src/stancjs/stancjs.ml"
-   click Driver "https://github.com/stan-dev/stanc3/blob/master/src/driver/"
-   click Frontend "https://github.com/stan-dev/stanc3/blob/master/src/frontend/"
-   click Analysis "https://github.com/stan-dev/stanc3/blob/master/src/analysis_and_optimization/"
-   click Backend "https://github.com/stan-dev/stanc3/blob/master/src/stan_math_backend/"
-   click Middle "https://github.com/stan-dev/stanc3/blob/master/src/middle/"
+```bash
+opam exec -- dune build src/stanc/stanc.exe
 ```
 
-The goal is to keep as many details about the way Stan is implemented by the core C++ implementation in the Stan Math backend library as possible.
-The Middle library contains the MIR and currently any types or functions used by the two ends.
-The entrypoint for the compiler is in `src/stanc/stanc.ml`. This parse command line arguments and
-calls into `src/driver/Entry.ml`, which sequences the various components together.
+Compile a model in SafeStan mode:
 
-### Distinct stanc Phases
-
-The phases of stanc are summarized in the following information flowchart and list.
-
-```mermaid
-flowchart TB
-
-    subgraph frontend[Frontend]
-        direction TB
-        infile>Source file]
-        lexer(frontend/lexer.mll)
-        parser(frontend/parser.mly)
-        typecheck(frontend/Typechecker.ml)
-        lower(frontend/Ast_to_Mir.ml)
-
-        infile --> lexer -->|Tokens| parser
-        parser -->|Untyped AST| typecheck -->|Typed AST| lower
-    end
-
-
-    subgraph middle[Middle Representation]
-        data{{MIR Data Structures}}
-    end
-
-    subgraph analysis[Static Analysis and Optimization]
-        optimize(analysis_and_optimization/Optimize.ml)
-    end
-
-    subgraph backend[Backend]
-        codegen(*_backend/Lower_program.ml)
-        transform(*_backend/Transform_Mir.ml)
-
-        transform -.->|MIR with backend specific code| optimize
-        transform --> codegen
-        optimize -->|Optimized MIR| codegen
-    end
-
-    outfile>Output File, e.g. a .hpp]
-
-    middle --- analysis
-    frontend ==> middle =====> backend ==> outfile
-
-
-    click lexer "https://github.com/stan-dev/stanc3/blob/master/src/frontend/lexer.mll"
-    click parser "https://github.com/stan-dev/stanc3/blob/master/src/frontend/parser.mly"
-    click typecheck "https://github.com/stan-dev/stanc3/blob/master/src/frontend/Typechecker.ml"
-    click lower "https://github.com/stan-dev/stanc3/blob/master/src/frontend/Ast_to_Mir.ml"
-    click optimize "https://github.com/stan-dev/stanc3/blob/master/src/analysis_and_optimization/Optimize.ml"
-    click data "https://github.com/stan-dev/stanc3/tree/master/src/middle"
-    click codegen "https://github.com/stan-dev/stanc3/blob/master/src/stan_math_backend/Lower_program.ml"
-    click transform "https://github.com/stan-dev/stanc3/blob/master/src/stan_math_backend/Transform_Mir.ml"
+```bash
+stanc --sstanc --sstan-protect=y,obs_x model.stan
 ```
 
-1. [Lex](src/frontend/lexer.mll) the Stan language into tokens.
-2. [Parse](src/frontend/parser.mly) Stan language into AST that represents the syntax quite closely and aides in development of pretty-printers and linters. `stanc --debug-ast` to print this out.
-3. Typecheck & add type information [Typechecker.ml](src/frontend/Typechecker.ml). `stanc --debug-decorated-ast`
-4. [Lower](src/frontend/Ast_to_Mir.ml) into [Middle Intermediate Representation](src/middle/Program.ml) (AST -> MIR) `stanc --debug-mir` (or `--debug-mir-pretty`)
-5. Backend-specific MIR transform (MIR -> MIR) [Transform_Mir.ml](src/stan_math_backend/Transform_Mir.ml) `stanc --debug-transformed-mir`
-6. Analyze & optimize (MIR -> MIR)
-7. Code generation (MIR -> [C++](src/stan_math_backend/Lower_program.ml)) (or other outputs, like [Tensorflow](https://github.com/stan-dev/stan2tfp/)).
+`--sstan-protect` is required when `--sstanc` is enabled.
 
-### The central data structures
+## What SafeStan Enforces
 
-1.  `src/frontend/Ast.ml` defines the AST. The AST is intended to have a direct 1-1 mapping with the syntax, so there are things like parentheses being kept around. The pretty-printer in the frontend uses the AST and attempts to keep user syntax the same while just adjusting whitespace.
+When `--sstanc` is on:
 
-    The AST uses a particular functional programming trick to add metadata to the AST (and its other tree types), sometimes called [the "two-level types" pattern](http://lambda-the-ultimate.org/node/4170#comment-63836). Essentially, many of the tree variant types are parameterized by something that ends up being a placeholder not for just metadata but for the recursive type including metadata, sometimes called the fixed point. So instead of recursively referencing `expression` you would instead reference type parameter `'e`, which will later be filled in with something like `type expr_with_meta = metadata expression`.
+1. No arbitrary scoring:
+   - Forbids `target += ...`
+   - Forbids `target()`
+   - Forbids `_lp` function definitions and calls
 
-    The AST intends to keep very close to Stan-level semantics and syntax in every way.
+2. Protected data single-use:
+   - Every protected variable must be a top-level `data` variable.
+   - Each protected variable must appear exactly once on the left side of `~`.
+   - Left side must be a plain identifier (no indexing/projections/expressions).
+   - Protected variables cannot be used before they are observed.
+   - Protected variables cannot be referenced in transformed data/parameters.
 
-2.  `src/middle/Program.ml` contains the MIR (Middle Intermediate Language). `src/frontend/Ast_to_Mir.ml` performs the lowering and attempts to strip out as much Stan-specific semantics and syntax as possible, though this is still something of a work-in-progress.
+3. Proper distribution path only:
+   - Sampling statements must resolve to built-in Stan distributions.
+   - User-defined distributions are rejected in `~`.
 
-    The MIR uses the same two-level types idea to add metadata, notably expression types and autodiff levels as well as locations on many things. The MIR is used as the output data type from the frontend and the input for dataflow analysis, optimization (which also outputs MIR), and code generation.
+4. Strict parameter discipline (enabled in this fork):
+   - Each parameter must appear in exactly one sampling statement.
+   - Parameters cannot be used before their sampling statement.
 
-3.  `src/stan_math_backend/Cpp.ml` defines a minimal representation of C++ used in code generation.
+5. Control-flow safety:
+   - Protected observations and parameter-prior sampling statements cannot appear
+     inside `if`/`for`/`while`.
 
-    This is intentionally simpler than both the above structures and than a true C++ AST and is tailored pretty specifically
-    to the C++ generated in our model class.
+6. Reserved identifier:
+   - `sstan_trusted_loglik__` is reserved in SafeStan mode.
 
-## Design goals
+If `--sstanc` is off, standard `stanc3` behavior is unchanged.
 
-- **Multiple phases** - each with human-readable intermediate representations for easy debugging and optimization design.
-- **Optimizing** - takes advantage of info known at the Stan language level. Minimize information we must teach users for them to write performant code.
-- **Holistic** - bring as much of the code as possible into the MIR for whole-program optimization.
-- **Research platform** - enable a new class of optimizations based on probability theory.
-- **Modular** - architect & build in a way that makes it easy to outsource things like symbolic differentiation to external libraries and to use parts of the compiler as the basis for other tools built around the Stan language.
-- **Simplicity first** - When making a choice between correct simplicity and a perceived performance benefit, we want to make the choice for simplicity unless we can show significant (> 5%) benchmark improvements to compile times or run times. Premature optimization is the root of all evil.
+## Diagnostics
+
+Violations are emitted as normal semantic errors with source locations and
+messages prefixed with `SStan violation:`.
+
+## Minimal Example
+
+Accepted:
+
+```stan
+data { int<lower=0,upper=1> y; }
+parameters { real<lower=0,upper=1> theta; }
+model {
+  theta ~ beta(1, 1);
+  y ~ bernoulli(theta);
+}
+```
+
+Rejected (arbitrary score edit):
+
+```stan
+data { int y; }
+model {
+  target += 1000;
+  y ~ poisson(1);
+}
+```
+
+## Implementation Notes
+
+- CLI flags are wired in `src/stanc/CLI.ml`.
+- SafeStan settings are carried in `src/driver/Flags.ml`.
+- Checks are implemented in `src/frontend/Sstan_check.ml`.
+- The pass runs post-typecheck in `src/driver/Entry.ml`.
+- A dedicated error constructor was added in `src/frontend/Semantic_error.ml`.
+- `stancjs` flag parsing was updated in `src/stancjs/stancjs.ml`.
+
+## Tests
+
+SafeStan integration coverage:
+
+```bash
+opam exec -- dune runtest test/integration/cli-args/sstanc.t
+```
+
+Broader CLI checks:
+
+```bash
+opam exec -- dune runtest test/integration/cli-args
+```
+
+## Current Scope and Limitations
+
+- This implementation focuses on compile-time safety checks.
+- Compiler-generated trusted log-likelihood output is not yet emitted.
+- The rules are intentionally conservative and may reject some otherwise valid
+  Stan programs.
