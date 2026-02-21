@@ -491,7 +491,21 @@ let exit_ok = Cmd.Exit.ok
 let exit_err = 1
 let exit_ice = Cmd.Exit.internal_error
 
+let subst_or_default ~fallback value =
+  if
+    String.is_prefix value ~prefix:"%%" && String.is_suffix value ~suffix:"%%"
+  then fallback
+  else value
+
 let info =
+  let cmd_name = subst_or_default ~fallback:"stanc" "%%NAME%%" in
+  let pkg_doc =
+    subst_or_default ~fallback:"https://mc-stan.org/stanc3/stanc/" "%%PKG_DOC%%"
+  in
+  let pkg_issues =
+    subst_or_default
+      ~fallback:"https://github.com/stan-dev/stanc3/issues"
+      "%%PKG_ISSUES%%" in
   let doc = "compile Stan programs to C++" in
   let man =
     [ `S Manpage.s_description
@@ -504,7 +518,9 @@ let info =
     ; `P
         "For more documentation on the compiler for users, see \
          https://mc-stan.org/docs/stan-users-guide/using-stanc.html."
-    ; `P "For more information on the compiler for developers, see %%PKG_DOC%%."
+    ; `P
+        (Fmt.str "For more information on the compiler for developers, see %s."
+           pkg_doc)
     ; `S Manpage.s_arguments; `S Manpage.s_options; `S Manpage.s_commands
     ; `P
         "The following flags will cause the compiler to exit after printing \
@@ -513,7 +529,7 @@ let info =
         "These flags are provided primarily for development and debugging; \
          their exact behavior should not be relied on."
     ; `S Manpage.s_exit_status; `S Manpage.s_bugs
-    ; `P "Please report at %%PKG_ISSUES%%." ] in
+    ; `P (Fmt.str "Please report at %s." pkg_issues) ] in
   let exits =
     Cmd.Exit.
       [ info ~doc:"on success." exit_ok
@@ -521,6 +537,6 @@ let info =
       ; info ~doc:"on command line parsing errors." cli_error
       ; info ~doc:"on internal compiler errors. Please file a bug!" exit_ice ]
   in
-  Cmd.info "%%NAME%%"
-    ~version:("%%NAME%%3 %%VERSION%%" ^ " (" ^ Sys.os_type ^ ")")
+  Cmd.info cmd_name
+    ~version:(Fmt.str "%s3 %s (%s)" cmd_name "%%VERSION%%" Sys.os_type)
     ~sdocs:Manpage.s_options ~doc ~man ~exits

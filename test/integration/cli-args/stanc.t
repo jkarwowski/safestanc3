@@ -3,10 +3,10 @@ Cmdliner error output can be different if color is enabled
 Show help
   $ stanc --help=plain
   NAME
-         %%NAME%% - compile Stan programs to C++
+         stanc - compile Stan programs to C++
   
   SYNOPSIS
-         %%NAME%% [OPTION]… [MODEL_FILE]
+         stanc [OPTION]… [MODEL_FILE]
   
   DESCRIPTION
          The Stan compiler (also known as stanc or stanc3) reads a Stan file
@@ -19,7 +19,8 @@ Show help
          For more documentation on the compiler for users, see
          https://mc-stan.org/docs/stan-users-guide/using-stanc.html.
   
-         For more information on the compiler for developers, see %%PKG_DOC%%.
+         For more information on the compiler for developers, see
+         https://mc-stan.org/stanc3/stanc/.
   
   ARGUMENTS
          MODEL_FILE
@@ -208,13 +209,13 @@ Show help
          125 on internal compiler errors. Please file a bug!
   
   ENVIRONMENT
-         These environment variables affect the execution of %%NAME%%:
+         These environment variables affect the execution of stanc:
   
          STANC_COLORS
              See option --color.
   
   BUGS
-         Please report at %%PKG_ISSUES%%.
+         Please report at https://github.com/stan-dev/stanc3/issues.
   
 
 
@@ -222,10 +223,10 @@ Show help
 Qmark alias
   $ stanc -? plain | head
   NAME
-         %%NAME%% - compile Stan programs to C++
+         stanc - compile Stan programs to C++
   
   SYNOPSIS
-         %%NAME%% [OPTION]… [MODEL_FILE]
+         stanc [OPTION]… [MODEL_FILE]
   
   DESCRIPTION
          The Stan compiler (also known as stanc or stanc3) reads a Stan file
@@ -234,33 +235,33 @@ Qmark alias
 
 Show version
   $ stanc --version
-  %%NAME%%3 %%VERSION%% (Unix)
+  stanc3 %%VERSION%% (Unix)
 
 Error when no file passed
   $ stanc
-  Usage: %%NAME%% [--help] [OPTION]… [MODEL_FILE]
-  %%NAME%%: No model file provided
+  Usage: stanc [--help] [OPTION]… [MODEL_FILE]
+  stanc: No model file provided
   [124]
 
 Error when multiple files passed
   $ stanc foo.stan foo2.stan
-  Usage: %%NAME%% [--help] [OPTION]… [MODEL_FILE]
-  %%NAME%%: too many arguments, don't know what to do with 'foo2.stan'
+  Usage: stanc [--help] [OPTION]… [MODEL_FILE]
+  stanc: too many arguments, don't know what to do with 'foo2.stan'
   [124]
 
 Error when a folder is passed
   $ mkdir foo.d
   $ stanc foo.d
-  Usage: %%NAME%% [--help] [OPTION]… [MODEL_FILE]
-  %%NAME%%: MODEL_FILE argument: 'foo.d' is a directory
+  Usage: stanc [--help] [OPTION]… [MODEL_FILE]
+  stanc: MODEL_FILE argument: 'foo.d' is a directory
   [124]
   $ rm -r foo.d
 
 Error when nonsense argument is passed
   $ stanc -fno-generated-quantities
-  Usage: %%NAME%% [--help] [OPTION]… [MODEL_FILE]
-  %%NAME%%: option '-f': invalid value 'no-generated-quantities', expected
-            either 'soa' or 'no-soa'
+  Usage: stanc [--help] [OPTION]… [MODEL_FILE]
+  stanc: option '-f': invalid value 'no-generated-quantities', expected either
+         'soa' or 'no-soa'
   [124]
 
 Error when unreadable file is passed

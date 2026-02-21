@@ -3,8 +3,8 @@ Cmdliner error output can be different if color is enabled
 
 Require protected list
   $ stanc --sstanc pass/01_basic_scalar_normal.stan
-  Usage: %%NAME%% [--help] [OPTION]… [MODEL_FILE]
-  %%NAME%%: SStan mode requires --sstan-protect
+  Usage: stanc [--help] [OPTION]… [MODEL_FILE]
+  stanc: SStan mode requires --sstan-protect
   [124]
 
 Reject non-data protected names
