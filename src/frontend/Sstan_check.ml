@@ -330,12 +330,19 @@ let rec lhs_base_identifier (expr : typed_expression) =
       Option.map ~f:(fun (id, _) -> (id, false)) (lhs_base_identifier e)
   | _ -> None
 
-let illegal_refs config state refs =
+let illegal_refs config param_vars state refs =
   let unobserved = Set.diff config.protected_vars state.observed_protected in
-  Set.inter refs unobserved
+  let illegal_protected = Set.inter refs unobserved in
+  let illegal_params =
+    if config.enforce_param_single_use then
+      let unassigned = Set.diff param_vars state.assigned_params in
+      Set.inter refs unassigned
+    else String.Set.empty in
+  (illegal_protected, illegal_params)
 
-let ensure_allowed_refs config state loc refs =
-  let illegal_protected = illegal_refs config state refs in
+let ensure_allowed_refs config param_vars state loc refs =
+  let illegal_protected, illegal_params =
+    illegal_refs config param_vars state refs in
   if not (Set.is_empty illegal_protected) then
     fail loc
       (Printf.sprintf
@@ -343,7 +350,16 @@ let ensure_allowed_refs config state loc refs =
          (string_of_names illegal_protected))
       ~hint:
         "Observe each protected variable earlier in the model block using `y ~ \
-         dist(...)`."
+         dist(...)`.";
+  if not (Set.is_empty illegal_params) then
+    fail loc
+      (Printf.sprintf
+         "SStan violation: parameter used before its unique prior statement: \
+          %s."
+         (string_of_names illegal_params))
+      ~hint:
+        "Move the parameter's sampling statement (`theta ~ dist(...)`) before \
+         any use."
 
 let check_distribution_is_builtin (kind : fun_kind) loc =
   match kind with
@@ -416,7 +432,7 @@ let rec check_model_stmt config param_vars ~context state
              lhs_name)
           ~hint:
             "Move deterministic factors out of sampling statements, and keep \
-             `~` only for protected data and optional parameter priors.";
+             `~` only for protected data and parameter priors.";
       if is_protected || (config.enforce_param_single_use && is_param) then
         disallow_sampling_in_control_flow config ~context stmt.smeta.loc
           lhs_name;
@@ -424,7 +440,7 @@ let rec check_model_stmt config param_vars ~context state
       let rhs_refs =
         List.fold args ~init:(truncation_refs truncation) ~f:(fun acc e ->
             Set.union acc (expr_refs e)) in
-      ensure_allowed_refs config state stmt.smeta.loc rhs_refs;
+      ensure_allowed_refs config param_vars state stmt.smeta.loc rhs_refs;
       if is_protected then (
         let new_count = count_of state.protected_counts lhs_name + 1 in
         if new_count > 1 then
@@ -448,13 +464,13 @@ let rec check_model_stmt config param_vars ~context state
                 statement."
                lhs_name)
             ~hint:
-              "Each parameter may have at most one prior/assignment sampling \
-               statement.";
+              "Each parameter must have exactly one prior sampling statement.";
         { state with
           assigned_params= Set.add state.assigned_params lhs_name
         ; param_counts= update_count state.param_counts lhs_name }
   | IfThenElse (cond, s_true, s_false_opt) ->
-      ensure_allowed_refs config state cond.emeta.loc (expr_refs cond);
+      ensure_allowed_refs config param_vars state cond.emeta.loc
+        (expr_refs cond);
       let true_state =
         check_model_stmt config param_vars ~context state s_true in
       let false_state =
@@ -466,17 +482,18 @@ let rec check_model_stmt config param_vars ~context state
            effects for protected data and parameters."
           ~hint:
             "Ensure both branches consume the same protected data and \
-             parameter sampling statements, or move shared sampling statements \
+             parameters exactly once, or move shared sampling statements \
              outside the conditional.";
       true_state
   | While (cond, body) ->
-      ensure_allowed_refs config state cond.emeta.loc (expr_refs cond);
+      ensure_allowed_refs config param_vars state cond.emeta.loc
+        (expr_refs cond);
       ignore
         (check_model_stmt config param_vars ~context:{in_loop= true} state body
           : model_state);
       state
   | For {lower_bound; upper_bound; loop_body; _} ->
-      ensure_allowed_refs config state lower_bound.emeta.loc
+      ensure_allowed_refs config param_vars state lower_bound.emeta.loc
         (Set.union (expr_refs lower_bound) (expr_refs upper_bound));
       ignore
         (check_model_stmt config param_vars ~context:{in_loop= true} state
@@ -484,7 +501,8 @@ let rec check_model_stmt config param_vars ~context state
           : model_state);
       state
   | ForEach (_, iteratee, loop_body) ->
-      ensure_allowed_refs config state iteratee.emeta.loc (expr_refs iteratee);
+      ensure_allowed_refs config param_vars state iteratee.emeta.loc
+        (expr_refs iteratee);
       ignore
         (check_model_stmt config param_vars ~context:{in_loop= true} state
            loop_body
@@ -498,7 +516,8 @@ let rec check_model_stmt config param_vars ~context state
         "SStan violation: function definitions are not allowed in the model \
          block."
   | _ ->
-      ensure_allowed_refs config state stmt.smeta.loc (statement_expr_refs stmt);
+      ensure_allowed_refs config param_vars state stmt.smeta.loc
+        (statement_expr_refs stmt);
       state
 
 let check_model_block config param_vars (prog : typed_program) =
@@ -527,7 +546,19 @@ let check_model_block config param_vars (prog : typed_program) =
          (string_of_names missing_protected))
       ~hint:
         "Add one top-level sampling statement for each protected data variable \
-         in the model block."
+         in the model block.";
+  if config.enforce_param_single_use then
+    let missing_params = missing_names final_state.param_counts param_vars in
+    if not (Set.is_empty missing_params) then
+      fail
+        (block_loc prog.modelblock)
+        (Printf.sprintf
+           "SStan violation: each parameter must have exactly one prior \
+            sampling statement. Missing priors for: %s."
+           (string_of_names missing_params))
+        ~hint:
+          "Add one top-level sampling statement for each parameter in the \
+           model block."
 
 let check_program config (prog : typed_program) =
   try

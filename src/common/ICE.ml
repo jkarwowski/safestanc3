@@ -8,9 +8,7 @@ let internal_compiler_error = raise_s
 
 let pkg_issues =
   let value = "%%PKG_ISSUES%%" in
-  if
-    String.is_prefix value ~prefix:"%%"
-    && String.is_suffix value ~suffix:"%%"
+  if String.is_prefix value ~prefix:"%%" && String.is_suffix value ~suffix:"%%"
   then "https://github.com/stan-dev/stanc3/issues"
   else value
 
@@ -28,6 +26,6 @@ let with_exn_message f =
          "Internal compiler error:@ @[%a@]@\n\
           %s@\n\
           @\n\
-          This should never happen. Please file a bug at %s@ and \
-          include this message and the model that caused this issue.@\n"
+          This should never happen. Please file a bug at %s@ and include this \
+          message and the model that caused this issue.@\n"
          Exn.pp e bt pkg_issues)

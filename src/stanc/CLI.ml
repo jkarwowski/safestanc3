@@ -492,8 +492,7 @@ let exit_err = 1
 let exit_ice = Cmd.Exit.internal_error
 
 let subst_or_default ~fallback value =
-  if
-    String.is_prefix value ~prefix:"%%" && String.is_suffix value ~suffix:"%%"
+  if String.is_prefix value ~prefix:"%%" && String.is_suffix value ~suffix:"%%"
   then fallback
   else value
 
@@ -503,8 +502,7 @@ let info =
     subst_or_default ~fallback:"https://mc-stan.org/stanc3/stanc/" "%%PKG_DOC%%"
   in
   let pkg_issues =
-    subst_or_default
-      ~fallback:"https://github.com/stan-dev/stanc3/issues"
+    subst_or_default ~fallback:"https://github.com/stan-dev/stanc3/issues"
       "%%PKG_ISSUES%%" in
   let doc = "compile Stan programs to C++" in
   let man =
@@ -520,8 +518,8 @@ let info =
          https://mc-stan.org/docs/stan-users-guide/using-stanc.html."
     ; `P
         (Fmt.str "For more information on the compiler for developers, see %s."
-           pkg_doc)
-    ; `S Manpage.s_arguments; `S Manpage.s_options; `S Manpage.s_commands
+           pkg_doc); `S Manpage.s_arguments; `S Manpage.s_options
+    ; `S Manpage.s_commands
     ; `P
         "The following flags will cause the compiler to exit after printing \
          information. No $(b,MODEL_FILE) is required."; `S Debug_Options.section

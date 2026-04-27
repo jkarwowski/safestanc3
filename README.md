@@ -6,6 +6,22 @@ model author is not trusted.
 SafeStan is a static (compile-time) restriction layer over Stan. Its purpose is
 to prevent likelihood hacking on a designated protected data interface.
 
+SafeStan is designed so that generated models report a normalized marginal
+log-likelihood for the interface being modelled. To do this, it assigns roles to
+top-level inputs and parameters. Variables named by `--sstan-protect` are
+modelled interface variables: each must be scored by a built-in distribution,
+exactly once, before any other use. They cannot be inspected in an `if`, used to
+compute helper values, or referenced in transformed blocks before that scoring
+statement. After a modelled interface variable has been scored, it is available
+as an ordinary model-block quantity and may be used in later computations or
+later likelihood terms. Other top-level `data` variables are context inputs:
+they may be used freely as predictors, constants, indices, or configuration, but
+they may not appear on the left side of a sampling statement. Parameters are
+latent variables: each parameter must have exactly one built-in prior sampling
+statement before it is used in the model block. SafeStan also rejects constructs
+that can directly inflate or edit the log-likelihood, such as `target +=`,
+`target()`, and `_lp` functions.
+
 The original upstream-style compiler README is preserved as `README_original`.
 
 ## Quick Start
@@ -45,9 +61,10 @@ When `--sstanc` is on:
    - Sampling statements must resolve to built-in Stan distributions.
    - User-defined distributions are rejected in `~`.
 
-4. Parameter sampling discipline:
-   - Parameter sampling statements are allowed but optional.
-   - When present, a parameter may appear in at most one sampling statement.
+4. Strict parameter discipline:
+   - Each parameter must appear in exactly one sampling statement.
+   - Parameters cannot be used in the model block before their sampling
+     statement.
 
 5. Control-flow safety:
    - Protected observations and parameter-prior sampling statements cannot appear
@@ -73,6 +90,7 @@ Accepted:
 data { int<lower=0,upper=1> y; }
 parameters { real<lower=0,upper=1> theta; }
 model {
+  theta ~ beta(1, 1);
   y ~ bernoulli(theta);
 }
 ```

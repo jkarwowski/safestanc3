@@ -1,9 +1,8 @@
-// Compile with: stanc --sstanc --sstan-protect=y,z
+// Compile with: stanc --sstanc --sstan-protect=y
 data {
   int<lower=0> N;
   vector[N] x;
   vector[N] y;
-  vector[N] z;
 }
 parameters {
   real a;
@@ -15,5 +14,4 @@ model {
   b ~ normal(0, 5);
   sigma ~ exponential(1);
   y ~ normal(a + b * x, sigma);
-  z ~ normal(y, sigma);
 }

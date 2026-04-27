@@ -24,7 +24,7 @@ PASS cases compile
   $ stanc --sstanc --sstan-protect=y pass/10_udf_deterministic_helper.stan
   $ stanc --sstanc --sstan-protect=x,y pass/11_two_protected_no_parameters.stan
   $ stanc --sstanc --sstan-protect=y pass/12_conditional_matched_observation.stan
-  $ stanc --sstanc --sstan-protect=y pass/13_vectorized_linear_regression_flat_priors.stan
+  $ stanc --sstanc --sstan-protect=y pass/13_vectorized_linear_regression_with_priors.stan
   $ stanc --sstanc --sstan-protect=y,z pass/14_observed_protected_data_as_value.stan
 
 FAIL cases reject with SStan violation
@@ -47,6 +47,8 @@ FAIL cases reject with SStan violation
   $ stanc --sstanc --sstan-protect=y fail/09_sampling_on_unprotected_data.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
   $ grep -q "SStan violation:" /tmp/sstanc.err
   $ stanc --sstanc --sstan-protect=y fail/10_lp_function_definition_or_call.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
+  $ grep -q "SStan violation:" /tmp/sstanc.err
+  $ stanc --sstanc --sstan-protect=y fail/11_parameter_missing_prior.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
   $ grep -q "SStan violation:" /tmp/sstanc.err
 
 Compared benchmark models: originals compile in standard Stan mode
