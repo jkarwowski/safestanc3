@@ -24,6 +24,8 @@ PASS cases compile
   $ stanc --sstanc --sstan-protect=y pass/10_udf_deterministic_helper.stan
   $ stanc --sstanc --sstan-protect=x,y pass/11_two_protected_no_parameters.stan
   $ stanc --sstanc --sstan-protect=y pass/12_conditional_matched_observation.stan
+  $ stanc --sstanc --sstan-protect=y pass/13_vectorized_linear_regression_flat_priors.stan
+  $ stanc --sstanc --sstan-protect=y,z pass/14_observed_protected_data_as_value.stan
 
 FAIL cases reject with SStan violation
   $ stanc --sstanc --sstan-protect=y fail/01_arbitrary_scoring_target_plus_equals.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0

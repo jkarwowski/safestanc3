@@ -38,15 +38,16 @@ When `--sstanc` is on:
    - Each protected variable must appear exactly once on the left side of `~`.
    - Left side must be a plain identifier (no indexing/projections/expressions).
    - Protected variables cannot be used before they are observed.
+   - After observation, a protected variable is treated as a normal value.
    - Protected variables cannot be referenced in transformed data/parameters.
 
 3. Proper distribution path only:
    - Sampling statements must resolve to built-in Stan distributions.
    - User-defined distributions are rejected in `~`.
 
-4. Strict parameter discipline (enabled in this fork):
-   - Each parameter must appear in exactly one sampling statement.
-   - Parameters cannot be used before their sampling statement.
+4. Parameter sampling discipline:
+   - Parameter sampling statements are allowed but optional.
+   - When present, a parameter may appear in at most one sampling statement.
 
 5. Control-flow safety:
    - Protected observations and parameter-prior sampling statements cannot appear
@@ -72,7 +73,6 @@ Accepted:
 data { int<lower=0,upper=1> y; }
 parameters { real<lower=0,upper=1> theta; }
 model {
-  theta ~ beta(1, 1);
   y ~ bernoulli(theta);
 }
 ```
