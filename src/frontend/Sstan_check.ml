@@ -232,7 +232,14 @@ let check_forbidden_target_and_lp (prog : typed_program) =
           ~hint:
             "Use distribution sampling statements (`~`) so all score \
              contributions come from vetted probability distributions."
-    | JacobianPE e | Return e -> check_expr e
+    | JacobianPE _ ->
+        fail stmt.smeta.loc
+          "SStan violation: direct `jacobian +=` adjustments are forbidden in \
+           --sstanc mode."
+          ~hint:
+            "Use distribution sampling statements (`~`) so all score \
+             contributions come from vetted probability distributions."
+    | Return e -> check_expr e
     | Tilde {arg; args; truncation; _} ->
         check_expr arg;
         List.iter args ~f:check_expr;
@@ -281,8 +288,20 @@ let check_forbidden_target_and_lp (prog : typed_program) =
             "SStan violation: defining functions with `_lp` suffix is \
              forbidden in --sstanc mode.";
         check_stmt body
-    | Print ps | Reject ps | FatalError ps ->
+    | Print ps ->
         List.iter ps ~f:(function PString _ -> () | PExpr e -> check_expr e)
+    | Reject _ ->
+        fail stmt.smeta.loc
+          "SStan violation: `reject()` is forbidden in --sstanc mode."
+          ~hint:
+            "Do not gate the model support manually; encode support through \
+             proper built-in distributions and parameter constraints."
+    | FatalError _ ->
+        fail stmt.smeta.loc
+          "SStan violation: `fatal_error()` is forbidden in --sstanc mode."
+          ~hint:
+            "Do not gate the model support manually; encode support through \
+             proper built-in distributions and parameter constraints."
     | Break | Continue | ReturnVoid | Skip -> () in
   Ast.fold_program
     (fun () stmt ->

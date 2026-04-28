@@ -50,6 +50,12 @@ FAIL cases reject with SStan violation
   $ grep -q "SStan violation:" /tmp/sstanc.err
   $ stanc --sstanc --sstan-protect=y fail/11_parameter_missing_prior.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
   $ grep -q "SStan violation:" /tmp/sstanc.err
+  $ stanc --sstanc --sstan-protect=y fail/12_jacobian_plus_equals.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
+  $ grep -q "SStan violation:" /tmp/sstanc.err
+  $ stanc --sstanc --sstan-protect=y fail/13_reject_statement.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
+  $ grep -q "SStan violation:" /tmp/sstanc.err
+  $ stanc --sstanc --sstan-protect=y fail/14_fatal_error_statement.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
+  $ grep -q "SStan violation:" /tmp/sstanc.err
 
 Compared benchmark models: originals compile in standard Stan mode
   $ stanc compared/arK.original.stan >/tmp/sstanc_compile.log 2>&1

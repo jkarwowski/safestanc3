@@ -4,7 +4,9 @@ This fork adds a SafeStan mode to `stanc3` for adversarial settings where the
 model author is not trusted.
 
 SafeStan is a static (compile-time) restriction layer over Stan. Its purpose is
-to prevent likelihood hacking on a designated protected data interface.
+to prevent *likelihood hacking* on a designated protected data interface, as
+described in [Likelihood hacking in probabilistic program
+synthesis](https://arxiv.org/abs/2603.24126).
 
 SafeStan is designed so that generated models report a normalized marginal
 log-likelihood for the interface being modelled. To do this, it assigns roles to
@@ -19,8 +21,9 @@ they may be used freely as predictors, constants, indices, or configuration, but
 they may not appear on the left side of a sampling statement. Parameters are
 latent variables: each parameter must have exactly one built-in prior sampling
 statement before it is used in the model block. SafeStan also rejects constructs
-that can directly inflate or edit the log-likelihood, such as `target +=`,
-`target()`, and `_lp` functions.
+that can directly inflate, edit, or gate the log-likelihood, such as
+`target +=`, `target()`, `jacobian +=`, `reject()`, `fatal_error()`, and `_lp`
+functions.
 
 The original upstream-style compiler README is preserved as `README_original`.
 
@@ -47,6 +50,8 @@ When `--sstanc` is on:
 1. No arbitrary scoring:
    - Forbids `target += ...`
    - Forbids `target()`
+   - Forbids `jacobian += ...`
+   - Forbids `reject()` and `fatal_error()`
    - Forbids `_lp` function definitions and calls
 
 2. Protected data single-use:
