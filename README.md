@@ -70,6 +70,9 @@ When `--sstanc` is on:
    - Each parameter must appear in exactly one sampling statement.
    - Parameters cannot be used in the model block before their sampling
      statement.
+   - Uses through transformed parameters are tracked: if `phi` depends on
+     `theta`, then using `phi` before `theta ~ ...` counts as using `theta`
+     before its prior.
 
 5. Control-flow safety:
    - Protected observations and parameter-prior sampling statements cannot appear

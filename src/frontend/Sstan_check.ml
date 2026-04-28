@@ -44,6 +44,27 @@ let rec lvalue_pack_refs = function
       List.fold lvals ~init:String.Set.empty ~f:(fun acc lv ->
           Set.union acc (lvalue_pack_refs lv))
 
+let rec lvalue_base_names ({lval; _} : typed_lval) =
+  match lval with
+  | LVariable id -> String.Set.singleton id.name
+  | LIndexed (inner, _) | LTupleProjection (inner, _) -> lvalue_base_names inner
+
+let rec lvalue_pack_base_names = function
+  | LValue lv -> lvalue_base_names lv
+  | LTuplePack {lvals; _} ->
+      List.fold lvals ~init:String.Set.empty ~f:(fun acc lv ->
+          Set.union acc (lvalue_pack_base_names lv))
+
+let sized_type_refs decl_type =
+  SizedType.fold
+    (fun acc e -> Set.union acc (expr_refs e))
+    String.Set.empty decl_type
+
+let transformation_refs transformation =
+  Transformation.fold
+    (fun acc e -> Set.union acc (expr_refs e))
+    String.Set.empty transformation
+
 let truncation_refs truncation =
   Ast.fold_truncation
     (fun acc expr -> Set.union acc (expr_refs expr))
@@ -76,17 +97,11 @@ let rec statement_expr_refs (stmt : typed_statement) =
       List.fold stmts ~init:String.Set.empty ~f:(fun acc st ->
           Set.union acc (sub st))
   | VarDecl {decl_type; transformation; variables; _} ->
+      let refs_in_decl_type = sized_type_refs decl_type in
+      let refs_in_transform = transformation_refs transformation in
       let refs_in_var acc {initial_value; _} =
         Option.value_map initial_value ~default:acc ~f:(fun e ->
             Set.union acc (expr_refs e)) in
-      let refs_in_decl_type =
-        SizedType.fold
-          (fun acc e -> Set.union acc (expr_refs e))
-          String.Set.empty decl_type in
-      let refs_in_transform =
-        Transformation.fold
-          (fun acc e -> Set.union acc (expr_refs e))
-          String.Set.empty transformation in
       List.fold variables
         ~init:(Set.union refs_in_decl_type refs_in_transform)
         ~f:refs_in_var
@@ -341,6 +356,74 @@ let check_preobservation_blocks config (prog : typed_program) =
   check_block prog.transformeddatablock "transformed data";
   check_block prog.transformedparametersblock "transformed parameters"
 
+let transformed_param_dependencies (prog : typed_program) =
+  let transformed_params =
+    block_declared_names prog.transformedparametersblock in
+  let add_dep deps name refs =
+    if Set.mem transformed_params name then
+      Map.update deps name ~f:(function
+        | None -> refs
+        | Some prev -> Set.union prev refs)
+    else deps in
+  let add_lvalue_deps deps lvalues refs =
+    Set.fold (lvalue_pack_base_names lvalues) ~init:deps ~f:(fun deps name ->
+        add_dep deps name refs) in
+  let rec collect_stmt ~ambient deps (stmt : typed_statement) =
+    match stmt.stmt with
+    | VarDecl {decl_type; transformation; variables; _} ->
+        let common_refs =
+          Set.union ambient
+            (Set.union
+               (sized_type_refs decl_type)
+               (transformation_refs transformation)) in
+        List.fold variables ~init:deps
+          ~f:(fun deps {identifier; initial_value} ->
+            let refs =
+              Option.value_map initial_value ~default:common_refs ~f:(fun e ->
+                  Set.union common_refs (expr_refs e)) in
+            add_dep deps identifier.name refs)
+    | Assignment {assign_lhs; assign_rhs; _} ->
+        let refs =
+          Set.union ambient
+            (Set.union (lvalue_pack_refs assign_lhs) (expr_refs assign_rhs))
+        in
+        add_lvalue_deps deps assign_lhs refs
+    | IfThenElse (cond, s_true, s_false_opt) ->
+        let branch_ambient = Set.union ambient (expr_refs cond) in
+        let deps = collect_stmt ~ambient:branch_ambient deps s_true in
+        Option.value_map s_false_opt ~default:deps ~f:(fun s ->
+            collect_stmt ~ambient:branch_ambient deps s)
+    | While (cond, body) ->
+        collect_stmt ~ambient:(Set.union ambient (expr_refs cond)) deps body
+    | For {lower_bound; upper_bound; loop_body; _} ->
+        let loop_refs =
+          Set.union (expr_refs lower_bound) (expr_refs upper_bound) in
+        collect_stmt ~ambient:(Set.union ambient loop_refs) deps loop_body
+    | ForEach (_, iteratee, loop_body) ->
+        collect_stmt
+          ~ambient:(Set.union ambient (expr_refs iteratee))
+          deps loop_body
+    | Block stmts | Profile (_, stmts) ->
+        List.fold stmts ~init:deps ~f:(collect_stmt ~ambient)
+    | Tilde _ | NRFunApp _ | TargetPE _ | JacobianPE _ | Return _ | ReturnVoid
+     |Print _ | Reject _ | FatalError _ | Break | Continue | Skip | FunDef _ ->
+        deps in
+  Ast.get_stmts prog.transformedparametersblock
+  |> List.fold ~init:String.Map.empty
+       ~f:(collect_stmt ~ambient:String.Set.empty)
+
+let expand_refs dependency_map refs =
+  let rec expand_name seen name =
+    if Set.mem seen name then String.Set.singleton name
+    else
+      match Map.find dependency_map name with
+      | None -> String.Set.singleton name
+      | Some deps ->
+          Set.fold deps ~init:String.Set.empty ~f:(fun acc dep ->
+              Set.union acc (expand_name (Set.add seen name) dep)) in
+  Set.fold refs ~init:String.Set.empty ~f:(fun acc name ->
+      Set.union acc (expand_name String.Set.empty name))
+
 let rec lhs_base_identifier (expr : typed_expression) =
   match expr.expr with
   | Variable id -> Some (id, true)
@@ -349,7 +432,8 @@ let rec lhs_base_identifier (expr : typed_expression) =
       Option.map ~f:(fun (id, _) -> (id, false)) (lhs_base_identifier e)
   | _ -> None
 
-let illegal_refs config param_vars state refs =
+let illegal_refs config param_vars transformed_deps state refs =
+  let refs = expand_refs transformed_deps refs in
   let unobserved = Set.diff config.protected_vars state.observed_protected in
   let illegal_protected = Set.inter refs unobserved in
   let illegal_params =
@@ -359,9 +443,9 @@ let illegal_refs config param_vars state refs =
     else String.Set.empty in
   (illegal_protected, illegal_params)
 
-let ensure_allowed_refs config param_vars state loc refs =
+let ensure_allowed_refs config param_vars transformed_deps state loc refs =
   let illegal_protected, illegal_params =
-    illegal_refs config param_vars state refs in
+    illegal_refs config param_vars transformed_deps state refs in
   if not (Set.is_empty illegal_protected) then
     fail loc
       (Printf.sprintf
@@ -430,7 +514,7 @@ let ensure_plain_lhs lhs_info loc =
         "SStan violation: sampling statement left-hand side must be a variable \
          identifier."
 
-let rec check_model_stmt config param_vars ~context state
+let rec check_model_stmt config param_vars transformed_deps ~context state
     (stmt : typed_statement) =
   match stmt.stmt with
   | Tilde {arg; distribution; kind; args; truncation} ->
@@ -459,7 +543,8 @@ let rec check_model_stmt config param_vars ~context state
       let rhs_refs =
         List.fold args ~init:(truncation_refs truncation) ~f:(fun acc e ->
             Set.union acc (expr_refs e)) in
-      ensure_allowed_refs config param_vars state stmt.smeta.loc rhs_refs;
+      ensure_allowed_refs config param_vars transformed_deps state
+        stmt.smeta.loc rhs_refs;
       if is_protected then (
         let new_count = count_of state.protected_counts lhs_name + 1 in
         if new_count > 1 then
@@ -488,13 +573,15 @@ let rec check_model_stmt config param_vars ~context state
           assigned_params= Set.add state.assigned_params lhs_name
         ; param_counts= update_count state.param_counts lhs_name }
   | IfThenElse (cond, s_true, s_false_opt) ->
-      ensure_allowed_refs config param_vars state cond.emeta.loc
-        (expr_refs cond);
+      ensure_allowed_refs config param_vars transformed_deps state
+        cond.emeta.loc (expr_refs cond);
       let true_state =
-        check_model_stmt config param_vars ~context state s_true in
+        check_model_stmt config param_vars transformed_deps ~context state
+          s_true in
       let false_state =
         Option.value_map s_false_opt ~default:state ~f:(fun s ->
-            check_model_stmt config param_vars ~context state s) in
+            check_model_stmt config param_vars transformed_deps ~context state s)
+      in
       if not (equal_model_state true_state false_state) then
         fail stmt.smeta.loc
           "SStan violation: conditional branches must have identical sampling \
@@ -505,41 +592,44 @@ let rec check_model_stmt config param_vars ~context state
              outside the conditional.";
       true_state
   | While (cond, body) ->
-      ensure_allowed_refs config param_vars state cond.emeta.loc
-        (expr_refs cond);
+      ensure_allowed_refs config param_vars transformed_deps state
+        cond.emeta.loc (expr_refs cond);
       ignore
-        (check_model_stmt config param_vars ~context:{in_loop= true} state body
+        (check_model_stmt config param_vars transformed_deps
+           ~context:{in_loop= true} state body
           : model_state);
       state
   | For {lower_bound; upper_bound; loop_body; _} ->
-      ensure_allowed_refs config param_vars state lower_bound.emeta.loc
+      ensure_allowed_refs config param_vars transformed_deps state
+        lower_bound.emeta.loc
         (Set.union (expr_refs lower_bound) (expr_refs upper_bound));
       ignore
-        (check_model_stmt config param_vars ~context:{in_loop= true} state
-           loop_body
+        (check_model_stmt config param_vars transformed_deps
+           ~context:{in_loop= true} state loop_body
           : model_state);
       state
   | ForEach (_, iteratee, loop_body) ->
-      ensure_allowed_refs config param_vars state iteratee.emeta.loc
-        (expr_refs iteratee);
+      ensure_allowed_refs config param_vars transformed_deps state
+        iteratee.emeta.loc (expr_refs iteratee);
       ignore
-        (check_model_stmt config param_vars ~context:{in_loop= true} state
-           loop_body
+        (check_model_stmt config param_vars transformed_deps
+           ~context:{in_loop= true} state loop_body
           : model_state);
       state
   | Block stmts | Profile (_, stmts) ->
       List.fold stmts ~init:state
-        ~f:(check_model_stmt config param_vars ~context)
+        ~f:(check_model_stmt config param_vars transformed_deps ~context)
   | FunDef _ ->
       fail stmt.smeta.loc
         "SStan violation: function definitions are not allowed in the model \
          block."
   | _ ->
-      ensure_allowed_refs config param_vars state stmt.smeta.loc
-        (statement_expr_refs stmt);
+      ensure_allowed_refs config param_vars transformed_deps state
+        stmt.smeta.loc (statement_expr_refs stmt);
       state
 
 let check_model_block config param_vars (prog : typed_program) =
+  let transformed_deps = transformed_param_dependencies prog in
   let initial_counts set =
     Set.fold set ~init:String.Map.empty ~f:(fun acc name ->
         Map.set acc ~key:name ~data:0) in
@@ -553,7 +643,9 @@ let check_model_block config param_vars (prog : typed_program) =
   let final_state =
     Ast.get_stmts prog.modelblock
     |> List.fold ~init:init_state
-         ~f:(check_model_stmt config param_vars ~context:{in_loop= false}) in
+         ~f:
+           (check_model_stmt config param_vars transformed_deps
+              ~context:{in_loop= false}) in
   let missing_protected =
     missing_names final_state.protected_counts config.protected_vars in
   if not (Set.is_empty missing_protected) then

@@ -26,6 +26,7 @@ PASS cases compile
   $ stanc --sstanc --sstan-protect=y pass/12_conditional_matched_observation.stan
   $ stanc --sstanc --sstan-protect=y pass/13_vectorized_linear_regression_with_priors.stan
   $ stanc --sstanc --sstan-protect=y,z pass/14_observed_protected_data_as_value.stan
+  $ stanc --sstanc --sstan-protect=y pass/15_transformed_parameter_after_prior.stan
 
 FAIL cases reject with SStan violation
   $ stanc --sstanc --sstan-protect=y fail/01_arbitrary_scoring_target_plus_equals.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
@@ -55,6 +56,10 @@ FAIL cases reject with SStan violation
   $ stanc --sstanc --sstan-protect=y fail/13_reject_statement.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
   $ grep -q "SStan violation:" /tmp/sstanc.err
   $ stanc --sstanc --sstan-protect=y fail/14_fatal_error_statement.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
+  $ grep -q "SStan violation:" /tmp/sstanc.err
+  $ stanc --sstanc --sstan-protect=y fail/15_transformed_parameter_alias_before_prior.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
+  $ grep -q "SStan violation:" /tmp/sstanc.err
+  $ stanc --sstanc --sstan-protect=y fail/16_transformed_parameter_likelihood_before_prior.stan > /tmp/sstanc.err 2>&1; status=$?; test $status -ne 0
   $ grep -q "SStan violation:" /tmp/sstanc.err
 
 Compared benchmark models: originals compile in standard Stan mode
